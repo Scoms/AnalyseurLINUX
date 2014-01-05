@@ -1,0 +1,25 @@
+README 
+
+Filtre DONE
+Live Mode DONE
+Fichier TODO
+Verbose DOING 
+
+Décodage : 
+ARP DONE 
+RARP TODO
+IP DONE 
+ -> TCP
+ -> UDP
+ 	-> DHCP  0043, 0044
+
+Protocole : 
+	- NAT
+	- DNS  53 udp tcp, 90
+	- SMTP 088C, 0019
+	- POP 110, 109
+	- IMAP 143
+	- SCTP
+	- HTTP DONE
+	- FTP 20 21
+	- Telnet
