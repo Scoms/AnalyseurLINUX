@@ -25,7 +25,7 @@ int main(int argc, char * argv[]){
 
 	//déclarations de variables 
 	char * device, * errbuff;
-	const char * filtre;
+	const char * filtre = NULL;
 	const char * file = NULL;
 	int optch;
 	pcap_t* listener;
@@ -104,6 +104,7 @@ int main(int argc, char * argv[]){
 void readPacket(u_char *args, const struct pcap_pkthdr* header, const u_char *packet){
 	headerDisplay(header);
 	packetDisplay(header,packet,verbose);
+	printf("\n");
 	//printf("\nexiste");
 }
 

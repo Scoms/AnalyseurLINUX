@@ -13,9 +13,8 @@
 #define SMALL 0
 
 //Protocoles
-#define TCP_PROT 6
-#define UDP_PROT 11
-#define BOOTP_PROT 17
+#define TCP_PROT 0x0600
+#define UDP_PROT 0x1100
 
 #define HTTP 80
 #define HTTPS 443
@@ -30,6 +29,10 @@
 #define IMAP 143
 #define IMAPSSL 993
 #define SCTP 22
+#define BOOTPC 68
+#define BOOTPS 67
+#define DNS1 28001
+#define DNS2 8805
 
 
 
@@ -50,19 +53,22 @@ void packetDisplay(const struct pcap_pkthdr * header,const u_char *packet,int ve
 	u_char destPort;
 
 	// Decision sur le protocole 
-	if(eth_type == IP){
-		readIP(header,packet,size_ethernet,verbose);
-		//printf("%x\n",destPort);
-	}
-	else if(eth_type == ARP){
-		arp = (struct arp*)(packet + size_ethernet);
-		readARP(arp,verbose);
-	}
-	else if (eth_type == RARP){
-		readApplicatif("RARP",header,packet, (sizeof(*arp)+sizeof(*ip)),verbose);		
-	}
-	else{
-		printf("---- ERROR ---\n");
+	switch(ntohs(eth_type)){
+		case ETHERTYPE_IP:
+			readIP(header,packet,size_ethernet,verbose);
+			break;
+		case ETHERTYPE_ARP:	
+			arp = (struct arp*)(packet + size_ethernet);
+			readARP(arp,verbose);
+			break;
+		case ETHERTYPE_REVARP:
+			readApplicatif("RARP",header,packet, (sizeof(*arp)+sizeof(*ip)),verbose);		
+			break;
+		default:
+			printf("%x\n",ntohs(eth_type) );
+			printf("--------------------------------ERROR IN ETHERNET INTERPRETATION ----------------------------------\n");
+			exit(1);
+			break;
 	}
 }
 
@@ -106,21 +112,47 @@ void readARP(struct arp* arp, int verbose){
 // permet d'afficher des u_char proprement
 void readU_Char(const u_char * toRead,int length,int type){
 	int i = 0;
+	char suite[16];
+	char toPrint;
 	for(i=0; i < length; i++){
-
+		toPrint = toRead[i];
 		// si c'est un gros contenu on le display en colonne par groupe de 4 
 		// Sinon en une seul ligne par groupe de 2 
-		if(type == BIG)
-			if(i%16 == 0)
-				printf("\n");
+		if(type == BIG){
+			if(!isprint(toPrint))
+				toPrint = '.';
+			suite[i%16] = toPrint;
+			if((i%16 == 0 && i != 0)){
+				printf("  %s\n",suite);
+				//bzero(suite,16);
+			}
+		}
 				
 		printf("%02x", (toRead[i])) ;
 		if(type == SMALL)
 			printf(" ");
-
 		else
 			if(i%2 == 1 && i != 0)
 				printf(" ");
+
+		if(type == BIG){
+			if((i == length -1)){
+			int j ;
+			for(j= i % 16; j < 17; j++){
+				if(j!= 16){
+				if(j%2 == 0)
+					printf("   ");
+				else
+					printf("  ");
+
+				}
+			}
+			//printf("    ");
+			for (j=0; j< (i%16+1); j++){
+				printf("%c",suite[j]);
+			}
+		}
+		}
 	}
 	printf("\n");
 }
@@ -163,32 +195,27 @@ void readIP(const struct pcap_pkthdr* header,const u_char* packet,int offset,int
 	if(verbose == 1){
 		printf("IP, ");
 	}
-	
+
+	offset += sizeof(*ip);		
 	struct tcphdr* tcp;
 	struct udphdr* udp;
-	switch(ip->ip_p){
-		case TCP_PROT:
-			// tcp = (struct tcphdr*)(packet + sizeof(*ip) + offset);
-			// readTCP(tcp,verbose);
-			offset += sizeof(*ip);
+	switch(ntohs(ip->ip_p)){
+		case TCP_PROT:;
 			readTCP(header,packet,offset,verbose);
 			break;
 		case UDP_PROT:
 			udp = (struct udphdr*)(ip + sizeof(ip));
-			readUDP(udp,verbose);
 			offset += sizeof(*udp);
-
+			readUDP(header,packet,udp,offset,verbose);
 			char * appli = "Applicatif";
 			if(udp->source == DHCP1 || udp->source == DHCP2)
 				appli = "DHCP";
-
-			readApplicatif("Applicatif",header,packet,offset,SMALL);
-			break;
-		case BOOTP_PROT:
-			readBootP(header,packet,offset,verbose);
+			//readApplicatif("Applicatif",header,packet,offset,SMALL);
 			break;
 		default:
+			printf("%x\n",ntohs(ip->ip_p));
 			printf("Protocole non traité : %i\n",ip->ip_p);
+			exit(1);
 			break;
 	}
 }
@@ -204,21 +231,26 @@ void readBootP(const struct pcap_pkthdr * header, const u_char * packet, int off
 		printf("  Transaction ID : %d\n",ntohs(bootp->bp_xid));
 		printf("  Seconds since begging : %d\n",ntohs(bootp->bp_secs));
 
-		printf("  Client Hard addr : \n");
+		printf("  Client Hard addr : ");
 		readU_Char(bootp->bp_chaddr,sizeof(bootp->bp_chaddr),SMALL);
 		printf("\n");
 
 		printf("  Server host name : ");
 		readU_Char(bootp->bp_sname,sizeof(bootp->bp_sname),SMALL);
+		printf("%s\n",bootp->bp_sname);//,sizeof(bootp->bp_sname),SMALL);
 		printf("\n");
 
 		printf("  Boot file name : ");
-		readU_Char(bootp->bp_file,sizeof(bootp->bp_file),SMALL);//,ntohs());
+		readU_Char(bootp->bp_file,sizeof(bootp->bp_file),SMALL);
+		printf("%s\n",bootp->bp_file);
 		printf("\n");
 		
 		printf("  Vendor spe : ");
 		readU_Char(bootp->bp_vend,sizeof(bootp->bp_vend),SMALL);
+		printf("%s\n",bootp->bp_vend);//(bootp->bp_vend,sizeof(bootp->bp_vend),SMALL);
 		printf("\n");
+		offset += sizeof(struct bootp*);
+		readApplicatif("BootP",header,packet,offset,3);
 	}
 	else if(verbose == MID){
 		printf("BOOTP : \n");
@@ -236,40 +268,48 @@ void readBootP(const struct pcap_pkthdr * header, const u_char * packet, int off
 	else{
 		printf("BOOTP \n");
 	}
-
-// 		u_char	bp_op;		/* packet opcode type */
-// #define	BOOTREQUEST	1
-// #define	BOOTREPLY	2
-// 	u_char	bp_htype;	/* hardware addr type */
-// 	u_char	bp_hlen;	/* hardware addr length */
-// 	u_char	bp_hops;	/* gateway hops */
-// 	u_int32_t bp_xid;	/* transaction ID */
-// 	u_short	bp_secs;	/* seconds since boot began */	
-// 	u_short	bp_unused;
-// 	iaddr_t	bp_ciaddr;	 client IP address 
-// 	iaddr_t	bp_yiaddr;	/* 'your' IP address */
-// 	iaddr_t	bp_siaddr;	/* server IP address */
-// 	iaddr_t	bp_giaddr;	/* gateway IP address */
-// 	u_char	bp_chaddr[16];	/* client hardware address */
-// 	u_char	bp_sname[64];	/* server host name */
-// 	u_char	bp_file[128];	/* boot file name */
-// 	u_char	bp_vend[64];	/* vendor-specific area */
-
+	exit(1);
 }
 
-void readUDP(struct udphdr * udp, int verbose){
+void readUDP(const struct pcap_pkthdr * header, const u_char * packet,struct udphdr * udp, int offset,int verbose){
 	if(verbose == 3){
 		printf("UDP : \n");
-		printf("Source port : %d\n",udp->source );
-		printf("Destination port : %d\n",udp->dest );
-		printf("Length : %d\n",udp->len );
-		printf("Checksum : %d\n",udp->check );
+		printf("  Source port : %d\n",udp->source );
+		printf("  Destination port : %d\n",udp->dest );
+		printf("  Length : %d\n",udp->len );
+		printf("  Checksum : %d\n",udp->check );
 	}
 	else if(verbose == 2){
 		printf("UDP : portdest -> %d , portsrc -> %d\n",udp->dest,udp->source);
 	}
 	else{
 		printf("UDP, ");
+	}
+	switch(udp->source){
+		case BOOTPC:
+			readBootP(header,packet,offset,verbose);
+			break;
+		case BOOTPS:
+			readBootP(header,packet,offset,verbose);
+			break;
+		case DNS1:
+			readApplicatif("DNS",header,packet,offset,verbose);
+			break;
+		default:
+			switch(udp->dest){
+				case BOOTPS:
+					readBootP(header,packet,offset,verbose);
+					break;
+				case BOOTPC:
+					readBootP(header,packet,offset,verbose);
+					break;
+				case DNS2:
+					readApplicatif("DNS",header,packet,offset,verbose);
+					break;
+				default:
+					readApplicatif("Applicatif ",header,packet,offset,verbose);
+					break;
+			}
 	}
 }
 
@@ -368,20 +408,31 @@ void readTCP(const struct pcap_pkthdr * header, const u_char * packet,int offset
 }
 
 void readApplicatif(char * application,const struct pcap_pkthdr* header,const u_char * packet, int offset, int verbose){
-	printf("\033[1;34m");	
-	printf("\n------------------------ DEBUT APPLICATIF ------------------\n");
-	printf("\033[00m");
-	printf("%s : \n",application);
-	const u_char * http = (packet + offset);
-	int i;
-	for (i = 0; i < header->len - offset; ++i)
-	{
-		printf("%c",packet[i]);
+
+	if(verbose == 3){
+		printf("\033[1;34m");	
+		printf("\n------------------------ DEBUT APPLICATIF ------------------\n");
+		printf("\033[00m");
+		printf("%s : \n",application);
+		const u_char * toRead = (packet + offset);
+		int i;
+		char toPrint;
+		for (i = 0; i < header->len - offset; ++i)
+		{
+			toPrint = toRead[i];
+			if(!isprint(toPrint))
+				toPrint = '.';
+			printf("%c",toPrint);
+		}
+		printf("\033[1;34m");	
+		printf("\n------------------------ FIN APPLICATIF ------------------");
+		printf("\033[00m");
+		printf("\n\n");
 	}
-	printf("\033[1;34m");	
-	printf("\n------------------------ FIN APPLICATIF ------------------");
-	printf("\033[00m");
-	printf("\n\n");
+	else{
+		printf("%s\n",application );
+	}
+	
 }
 
 void getHour(const struct pcap_pkthdr* header,int verbose){

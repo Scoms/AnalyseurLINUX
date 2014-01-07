@@ -50,7 +50,7 @@ void printf_notohs(char * text,u_char  * content);
 void readIP(const struct pcap_pkthdr * header, const u_char * packet,int offset,int verbose);
 void readBootP(const struct pcap_pkthdr * header, const u_char * packet, int offset, int verbose);
 void readTCP(const struct pcap_pkthdr * header,const u_char * packet,int offset,int verbose);
-void readUDP(struct udphdr* udp,int verbose);
+void readUDP(const struct pcap_pkthdr * header,const u_char * packet,struct udphdr* udp,int offset,int verbose);
 void readU_Char(const u_char * toRead,int length,int verbose);
 void readARP(struct arp * arp, int verbose);
 void print_ip(const u_char * ip);

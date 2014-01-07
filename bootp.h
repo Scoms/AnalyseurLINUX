@@ -23,7 +23,7 @@ struct bootp {
 	iaddr_t	bp_yiaddr;	/* 'your' IP address */
 	iaddr_t	bp_siaddr;	/* server IP address */
 	iaddr_t	bp_giaddr;	/* gateway IP address */
-	u_char	bp_chaddr[16];	/* client hardware address */
+	u_char	bp_chaddr[8];	/* client hardware address */
 	u_char	bp_sname[64];	/* server host name */
 	u_char	bp_file[128];	/* boot file name */
 	u_char	bp_vend[64];	/* vendor-specific area */
